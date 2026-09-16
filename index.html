@@ -466,6 +466,8 @@
   let activeCat = CATS[0].id;
   let lastRegCategory = null;
   let isAdmin = false;
+  let editingMatches = new Set(); // id các trận đang ở chế độ sửa kết quả (tạm, không lưu)
+  let editingSchedule = new Set(); // id các trận đang ở chế độ sửa lịch thi đấu (tạm, không lưu)
   let ready = false;
 
   const STORAGE_KEY = 'badminton_tournament_v1';
@@ -503,8 +505,15 @@
       fields.forEach((f, idx)=>{
         const fw = el('div','modal-field');
         fw.appendChild(el('label','', escapeHtml(f.label)));
-        const inp = document.createElement('input');
-        inp.type = f.type || 'text';
+        let inp;
+        if(f.type === 'textarea'){
+          inp = document.createElement('textarea');
+          inp.rows = 5;
+          inp.style.cssText = 'width:100%;background:#0c0f14;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:inherit;font-size:14px;resize:vertical;';
+        } else {
+          inp = document.createElement('input');
+          inp.type = f.type || 'text';
+        }
         inp.placeholder = f.placeholder || '';
         if(f.value!==undefined && f.value!==null) inp.value = f.value;
         fw.appendChild(inp);
@@ -529,7 +538,9 @@
       };
       okBtn.onclick = submit;
       Object.values(inputs).forEach(inp=>{
-        inp.onkeydown = (e)=>{ if(e.key==='Enter') submit(); };
+        if(inp.tagName !== 'TEXTAREA'){
+          inp.onkeydown = (e)=>{ if(e.key==='Enter') submit(); };
+        }
       });
       actions.appendChild(cancelBtn); actions.appendChild(okBtn);
       box.appendChild(actions);
@@ -562,22 +573,13 @@
 
   const SNAPSHOT_DATE = new Date().toISOString();
 
-  // BẢN PUBLIC CHỈ XEM: dữ liệu thật do BTC xuất ra từ công cụ nội bộ (nút "Xuất dữ liệu"),
-  // đã được Claude kiểm tra và loại bỏ dữ liệu test/rác trước khi nhúng vào đây.
-  // Đóng băng tại thời điểm xuất bản — BTC nhờ Claude publish lại khi có cập nhật mới.
-  let DECODE_ERROR = null;
-  let PUBLIC_STATE = null;
-  try{
-    PUBLIC_STATE = JSON.parse(decodeURIComponent(escape(atob("eyJhdGhsZXRlcyI6IFt7ImlkIjogIjFpbDM2cnBtIiwgIm5hbWUiOiAiUGjhuqFtIFRoYW5oIFRo4bq/IiwgImRlcHQiOiAiUUMgTGluZS9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX25hbSIsICJjcmVhdGVkQXQiOiAiMjAyNi0wOS0xNVQwNzowOTozNy42MjBaIn0sIHsiaWQiOiAiam0wcmZheDYiLCAibmFtZSI6ICJOZ3V54buFbiBUaOG7iyBD4bqpbSBMaW5oIiwgImRlcHQiOiAiUUMvQVZGIiwgInBhcnRuZXIiOiAiIiwgImNhdGVnb3J5IjogImRvbl9udSIsICJjcmVhdGVkQXQiOiAiMjAyNi0wOS0xNVQwNzowOTozNy42MjVaIn0sIHsiaWQiOiAiaWQ5d2wyejciLCAibmFtZSI6ICJMw6ogVGjhu4sgS2ltIEtow6FuaCIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIiIsICJjYXRlZ29yeSI6ICJkb25fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogIndmZXQ0cWduIiwgIm5hbWUiOiAiVsO1IFRo4buLIE5oxrAgw50iLCAiZGVwdCI6ICJRQy9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX251IiwgImNyZWF0ZWRBdCI6ICIyMDI2LTA5LTE1VDA3OjA5OjM3LjYyNVoifSwgeyJpZCI6ICJxMjV6bHRiNiIsICJuYW1lIjogIkh14buzbmggTmd1eeG7hW4gVMaw4budbmcgVnkiLCAiZGVwdCI6ICJRQy9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX251IiwgImNyZWF0ZWRBdCI6ICIyMDI2LTA5LTE1VDA3OjA5OjM3LjYyNVoifSwgeyJpZCI6ICJnMmQzYm9xcyIsICJuYW1lIjogIlbDtSBUaOG7iyBIdeG7s25oIExhbmgiLCAiZGVwdCI6ICJRQy9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX251IiwgImNyZWF0ZWRBdCI6ICIyMDI2LTA5LTE1VDA3OjA5OjM3LjYyNVoifSwgeyJpZCI6ICIxeDZkMW1obSIsICJuYW1lIjogIk5ndXnhu4VuIFRo4buLIEhvYSIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIiIsICJjYXRlZ29yeSI6ICJkb25fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogIjF1aWY2ZnA2IiwgIm5hbWUiOiAixJDhu5cgVGjhu4sgVGjDuXkgTGluaCIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIiIsICJjYXRlZ29yeSI6ICJkb25fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogImU1d2EzeG9tIiwgIm5hbWUiOiAiTmd1eeG7hW4gVGjhu4sgQ+G6qW0gTGluaCIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIk5ndXnhu4VuIE5n4buNYyBTxqFuIiwgImNhdGVnb3J5IjogImRvaV9uYW1fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogIjJ1M2FmNmc0IiwgIm5hbWUiOiAiUGjhuqFtIFRoYW5oIFRo4bq/IiwgImRlcHQiOiAiUUMgTGluZS9BVkYiLCAicGFydG5lciI6ICJQaOG6oW0gVGjhu4sgTmfhu41jIFF1eeG7gW4iLCAiY2F0ZWdvcnkiOiAiZG9pX25hbV9udSIsICJjcmVhdGVkQXQiOiAiMjAyNi0wOS0xNVQwNzowOTozNy42MjVaIn1dLCAiYnJhY2tldHMiOiB7ImRvbl9udSI6IHsicm91bmRzIjogW1t7ImlkIjogIm92bDZkcDI0IiwgInAxIjogeyJpZCI6ICJxMjV6bHRiNiIsICJsYWJlbCI6ICJIdeG7s25oIE5ndXnhu4VuIFTGsOG7nW5nIFZ5IiwgImRlcHQiOiAiUUMvQVZGIn0sICJwMiI6IHsiaWQiOiAiam0wcmZheDYiLCAibGFiZWwiOiAiTmd1eeG7hW4gVGjhu4sgQ+G6qW0gTGluaCIsICJkZXB0IjogIlFDL0FWRiJ9LCAic2V0cyI6IFt7InMxIjogIjIxIiwgInMyIjogIjE4In0sIHsiczEiOiAiMjEiLCAiczIiOiAiMTgifSwgeyJzMSI6ICIiLCAiczIiOiAiIn1dLCAid2lubmVyIjogInAxIiwgImRhdGUiOiAiMjAyNi0wOS0xNSIsICJ0aW1lIjogIjE2OjMwIn0sIHsiaWQiOiAibHVqa2g5cnoiLCAicDEiOiB7ImlkIjogImlkOXdsMno3IiwgImxhYmVsIjogIkzDqiBUaOG7iyBLaW0gS2jDoW5oIiwgImRlcHQiOiAiUUMvQVZGIn0sICJwMiI6IHsiaWQiOiAiZzJkM2JvcXMiLCAibGFiZWwiOiAiVsO1IFRo4buLIEh14buzbmggTGFuaCIsICJkZXB0IjogIlFDL0FWRiJ9LCAic2V0cyI6IFt7InMxIjogIiIsICJzMiI6ICIifSwgeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9XSwgIndpbm5lciI6IG51bGwsICJkYXRlIjogIiIsICJ0aW1lIjogIiJ9LCB7ImlkIjogImphaW11dnRvIiwgInAxIjogeyJpZCI6ICJ3ZmV0NHFnbiIsICJsYWJlbCI6ICJWw7UgVGjhu4sgTmjGsCDDnSIsICJkZXB0IjogIlFDL0FWRiJ9LCAicDIiOiB7ImlkIjogIjF1aWY2ZnA2IiwgImxhYmVsIjogIsSQ4buXIFRo4buLIFRow7l5IExpbmgiLCAiZGVwdCI6ICJRQy9BVkYifSwgInNldHMiOiBbeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifV0sICJ3aW5uZXIiOiBudWxsLCAiZGF0ZSI6ICIiLCAidGltZSI6ICIifSwgeyJpZCI6ICI1MnFwMWxoNCIsICJwMSI6IHsiaWQiOiAiMXg2ZDFtaG0iLCAibGFiZWwiOiAiTmd1eeG7hW4gVGjhu4sgSG9hIiwgImRlcHQiOiAiUUMvQVZGIn0sICJwMiI6IG51bGwsICJzZXRzIjogW3siczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifSwgeyJzMSI6ICIiLCAiczIiOiAiIn1dLCAid2lubmVyIjogInAxIiwgImRhdGUiOiAiIiwgInRpbWUiOiAiIn1dLCBbeyJpZCI6ICIyc3ozcTdoeSIsICJwMSI6IHsiaWQiOiAicTI1emx0YjYiLCAibGFiZWwiOiAiSHXhu7NuaCBOZ3V54buFbiBUxrDhu51uZyBWeSIsICJkZXB0IjogIlFDL0FWRiJ9LCAicDIiOiBudWxsLCAic2V0cyI6IFt7InMxIjogIiIsICJzMiI6ICIifSwgeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9XSwgIndpbm5lciI6IG51bGwsICJkYXRlIjogIiIsICJ0aW1lIjogIiJ9LCB7ImlkIjogImIzZWdwdmZwIiwgInAxIjogbnVsbCwgInAyIjogeyJpZCI6ICIxeDZkMW1obSIsICJsYWJlbCI6ICJOZ3V54buFbiBUaOG7iyBIb2EiLCAiZGVwdCI6ICJRQy9BVkYifSwgInNldHMiOiBbeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifV0sICJ3aW5uZXIiOiAicDIiLCAiZGF0ZSI6ICIiLCAidGltZSI6ICIifV0sIFt7ImlkIjogImt5ZW9ocXk3IiwgInAxIjogbnVsbCwgInAyIjogbnVsbCwgInNldHMiOiBbeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifV0sICJ3aW5uZXIiOiBudWxsLCAiZGF0ZSI6ICIiLCAidGltZSI6ICIifV1dLCAidG90YWxSb3VuZHMiOiAzfX0sICJwbGFuIjogW3siaWQiOiAidjVwZjZnYmkiLCAidGl0bGUiOiAiTeG7nyDEkcSDbmcga8O9IHbhuq1uIMSR4buZbmcgdmnDqm4iLCAiZGVzYyI6ICJUb8OgbiB0aOG7gyBuaMOibiB2acOqbiDEkcSDbmcga8O9IHF1YSB0YWIgxJDEg25nIGvDvSIsICJkYXRlIjogIjIwMjYtMDktMTRUMDg6MjQ6MDMuNDEwWiIsICJkb25lIjogdHJ1ZX0sIHsiaWQiOiAiY2dkcG5sdjciLCAidGl0bGUiOiAiQ2jhu5F0IGRhbmggc8OhY2ggJiBi4buRYyB0aMSDbSIsICJkZXNjIjogIkJUQyB0aeG6v24gaMOgbmggYuG7kWMgdGjEg20gY2hpYSBi4bqjbmcgY2hvIHThu6tuZyBu4buZaSBkdW5nIiwgImRhdGUiOiAiMjAyNi0wOS0yMVQwODoyNDowMy40MTVaIiwgImRvbmUiOiBmYWxzZX0sIHsiaWQiOiAiOGYwM3g4N28iLCAidGl0bGUiOiAiVGhpIMSR4bqldSB2w7JuZyBsb+G6oWkiLCAiZGVzYyI6ICJUaGkgxJHhuqV1IHbDsm5nIDEgLSB2w7JuZyAyIGPDoWMgbuG7mWkgZHVuZyIsICJkYXRlIjogIjIwMjYtMDktMjhUMDg6MjQ6MDMuNDE1WiIsICJkb25lIjogZmFsc2V9LCB7ImlkIjogIjV5Zms0dm1mIiwgInRpdGxlIjogIkLDoW4ga+G6v3QgJiBDaHVuZyBr4bq/dCIsICJkZXNjIjogIlRyYW8gZ2nhuqNpIHRvw6BuIGLhu5kgNCBu4buZaSBkdW5nIiwgImRhdGUiOiAiMjAyNi0xMC0wNVQwODoyNDowMy40MTVaIiwgImRvbmUiOiBmYWxzZX1dLCAiYW5ub3VuY2VtZW50cyI6IFt7ImlkIjogInpuMWhoZzB0IiwgInRleHQiOiAiQ2jDoG8gbeG7q25nIMSR4bq/biB24bubaSBHaeG6o2kgQ+G6p3UgTMO0bmcgTuG7mWkgQuG7mSEgUXXDqXQgbcOjIFFSIHRyw6puIFBvc3RlciDEkeG7gyDEkcSDbmcga8O9IHRoYW0gZ2lhLiIsICJkYXRlIjogIjIwMjYtMDktMTRUMDg6MjQ6MDMuNDE1WiJ9XX0="))));
-  }catch(e){
-    DECODE_ERROR = (e && e.message) ? e.message : String(e);
-    PUBLIC_STATE = { athletes: [], brackets: {}, plan: [], announcements: [] };
-  }
+  // BẢN PUBLIC CHỈ XEM: dữ liệu thật do BTC xuất ra từ công cụ nội bộ, đã được kiểm tra
+  // và loại bỏ dữ liệu test/rác trước khi nhúng vào đây. Đóng băng tại thời điểm xuất bản —
+  // BTC nhờ Claude publish lại khi có cập nhật mới.
+  const PUBLIC_STATE = {"athletes": [{"id": "1il36rpm", "name": "Phạm Thanh Thế", "dept": "QC Line/AVF", "partner": "", "category": "don_nam", "createdAt": "2026-09-15T07:09:37.620Z"}, {"id": "jm0rfax6", "name": "Nguyễn Thị Cẩm Linh", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "id9wl2z7", "name": "Lê Thị Kim Khánh", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "wfet4qgn", "name": "Võ Thị Như Ý", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "q25zltb6", "name": "Huỳnh Nguyễn Tường Vy", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "g2d3boqs", "name": "Võ Thị Huỳnh Lanh", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "1x6d1mhm", "name": "Nguyễn Thị Hoa", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "1uif6fp6", "name": "Đỗ Thị Thùy Linh", "dept": "QC/AVF", "partner": "", "category": "don_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "e5wa3xom", "name": "Nguyễn Thị Cẩm Linh", "dept": "QC/AVF", "partner": "Nguyễn Ngọc Sơn", "category": "doi_nam_nu", "createdAt": "2026-09-15T07:09:37.625Z"}, {"id": "2u3af6g4", "name": "Phạm Thanh Thế", "dept": "QC Line/AVF", "partner": "Phạm Thị Ngọc Quyền", "category": "doi_nam_nu", "createdAt": "2026-09-15T07:09:37.625Z"}], "brackets": {"don_nu": {"rounds": [[{"id": "ovl6dp24", "p1": {"id": "q25zltb6", "label": "Huỳnh Nguyễn Tường Vy", "dept": "QC/AVF"}, "p2": {"id": "jm0rfax6", "label": "Nguyễn Thị Cẩm Linh", "dept": "QC/AVF"}, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": null, "date": "", "time": ""}, {"id": "lujkh9rz", "p1": {"id": "id9wl2z7", "label": "Lê Thị Kim Khánh", "dept": "QC/AVF"}, "p2": {"id": "g2d3boqs", "label": "Võ Thị Huỳnh Lanh", "dept": "QC/AVF"}, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": null, "date": "", "time": ""}, {"id": "jaimuvto", "p1": {"id": "wfet4qgn", "label": "Võ Thị Như Ý", "dept": "QC/AVF"}, "p2": {"id": "1uif6fp6", "label": "Đỗ Thị Thùy Linh", "dept": "QC/AVF"}, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": null, "date": "", "time": ""}, {"id": "52qp1lh4", "p1": {"id": "1x6d1mhm", "label": "Nguyễn Thị Hoa", "dept": "QC/AVF"}, "p2": null, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": "p1", "date": "", "time": ""}], [{"id": "2sz3q7hy", "p1": null, "p2": null, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": null, "date": "", "time": ""}, {"id": "b3egpvfp", "p1": null, "p2": {"id": "1x6d1mhm", "label": "Nguyễn Thị Hoa", "dept": "QC/AVF"}, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": "p2", "date": "", "time": ""}], [{"id": "kyeohqy7", "p1": null, "p2": null, "sets": [{"s1": "", "s2": ""}, {"s1": "", "s2": ""}, {"s1": "", "s2": ""}], "winner": null, "date": "", "time": ""}]], "totalRounds": 3}}, "plan": [{"id": "v5pf6gbi", "title": "Mở đăng ký vận động viên", "desc": "Toàn thể nhân viên đăng ký qua tab Đăng ký", "date": "2026-09-14T08:24:03.410Z", "done": true}, {"id": "cgdpnlv7", "title": "Chốt danh sách & bốc thăm", "desc": "BTC tiến hành bốc thăm chia bảng cho từng nội dung", "date": "2026-09-30", "done": false}, {"id": "5yfk4vmf", "title": "Bán kết & Chung kết", "desc": "Trao giải toàn bộ 4 nội dung", "date": "2026-10-05T08:24:03.415Z", "done": false}], "announcements": [{"id": "uan63cjl", "text": "Bấm link để theo dõi tất cả thông tin về giải cầu lông: \nhttps://giai-cau-long-vfd.onrender.com/", "date": "2026-09-16T07:48:06.015Z"}, {"id": "5vrk0all", "text": "Để đăng ký bấm vào link:\nhttps://docs.google.com/spreadsheets/d/13ZccIwc2BLKtd7PfL55MVyy391dt_eSeEa78axGL9eE/edit?gid=662289923#gid=662289923", "date": "2026-09-16T07:47:01.836Z"}, {"id": "zn1hhg0t", "text": "Chào mừng đến với Giải Cầu Lông Nội Bộ! Quét mã QR trên Poster để đăng ký tham gia.", "date": "2026-09-14T08:24:03.415Z"}]};
 
   function loadState(){
     state = Object.assign({ athletes: [], brackets: {}, plan: [], announcements: [] }, PUBLIC_STATE);
-    // Mở mặc định vào nội dung ĐÃ có bảng đấu, tránh người mở link lần đầu
-    // rơi vào tab đầu tiên (Đơn Nam) đang trống rồi tưởng nhầm là lỗi.
     const firstWithBracket = CATS.find(c => state.brackets[c.id]);
     if(firstWithBracket) activeCat = firstWithBracket.id;
     ready = true;
@@ -734,6 +736,26 @@
     render();
   }
 
+  // Xoá hẳn kết quả 1 trận (về trạng thái chưa đấu) để BTC cho đánh lại khi có tranh cãi.
+  // Đồng thời gỡ người thắng cũ khỏi ô vòng sau (nếu đã được đẩy lên) để tránh dữ liệu "ma".
+  function clearMatchResult(catId, roundIdx, matchIdx){
+    const b = state.brackets[catId];
+    if(!b) return;
+    const m = b.rounds[roundIdx][matchIdx];
+    m.winner = null;
+    m.sets = [{s1:'',s2:''},{s1:'',s2:''},{s1:'',s2:''}];
+    // Gỡ người thắng cũ khỏi vòng kế tiếp nếu có
+    if(roundIdx+1 < b.rounds.length){
+      const nextMatch = b.rounds[roundIdx+1][Math.floor(matchIdx/2)];
+      if(nextMatch){
+        if(matchIdx%2===0) nextMatch.p1 = null; else nextMatch.p2 = null;
+      }
+    }
+    saveState();
+    render();
+    showToast('🗑️ Đã xoá kết quả, có thể nhập lại từ đầu');
+  }
+
   /* ---------- Rendering ---------- */
   function el(tag, cls, html){ const e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
 
@@ -818,7 +840,7 @@
       const addBtn = el('button','btn btn-outline','+ Đăng thông báo');
       addBtn.onclick = async ()=>{
         const res = await modalPrompt('Đăng thông báo mới', [
-          {key:'text', label:'Nội dung thông báo', placeholder:'Nhập nội dung...'}
+          {key:'text', label:'Nội dung thông báo (có thể nhiều dòng, dán link sẽ tự bấm được)', type:'textarea', placeholder:'Nhập nội dung...'}
         ]);
         if(res && res.text){
           state.announcements.unshift({id:uid(), text:res.text, date:new Date().toISOString()});
@@ -833,20 +855,34 @@
     } else {
       state.announcements.forEach(a=>{
         const it = el('div','ann-item');
+        it.style.position = 'relative';
         it.innerHTML = `<div class="ann-date">${fmtDate(a.date)}</div><div class="ann-text" style="white-space:pre-wrap;word-break:break-word;">${linkify(a.text)}</div>`;
+        if(isAdmin){
+          const rm = el('button','btn btn-outline','✕ Xoá');
+          rm.style.cssText = 'margin-top:8px;font-size:12px;padding:4px 10px;color:var(--red);border-color:var(--red);';
+          rm.onclick = async ()=>{
+            const ok = await modalConfirm('Xoá thông báo này?');
+            if(!ok) return;
+            state.announcements = state.announcements.filter(x=>x.id!==a.id);
+            saveState(); render();
+          };
+          it.appendChild(rm);
+        }
         card.appendChild(it);
       });
     }
     app.appendChild(card);
   }
 
-  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-
+  // Biến URL trong text thành thẻ <a> bấm được, đồng thời escape HTML để an toàn (chống XSS)
+  // rồi mới chèn newline -> <br> và link -> <a>.
   function linkify(text){
     const escaped = escapeHtml(text);
     const urlRegex = /(https?:\/\/[^\s<]+)/g;
     return escaped.replace(urlRegex, url => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--gold);text-decoration:underline;">${url}</a>`);
   }
+
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
   function renderRoster(app){
     app.appendChild(el('h2','section-title','Danh sách vận động viên'));
@@ -1215,9 +1251,33 @@
 
 
   // Lưới nhập điểm 3 set (best-of-3, 21 điểm, cách biệt >=2, tối đa 30) + nút xác nhận
+  // Nếu trận ĐÃ có kết quả, mặc định khoá (chỉ xem) — BTC phải bấm "Sửa kết quả" mới mở khoá để chỉnh,
+  // và phải bấm "Xác nhận" mới thực sự lưu thay đổi (bấm "Huỷ" sẽ khôi phục lại điểm cũ).
   function renderSetGrid(m, catId, rIdx, mIdx){
     const wrap = el('div','set-grid-wrap');
-    const canEdit = isAdmin && !m.winner;
+    const isEditingThis = editingMatches.has(m.id);
+    const canEdit = isAdmin && (!m.winner || isEditingThis);
+
+    if(isAdmin && m.winner && !isEditingThis){
+      const editRow = el('div','confirm-row');
+      const editBtn = el('button','mini-btn','✏️ Sửa kết quả');
+      editBtn.onclick = ()=>{
+        // lưu bản gốc để có thể khôi phục nếu bấm Huỷ
+        m._setsBackup = JSON.parse(JSON.stringify(m.sets));
+        editingMatches.add(m.id);
+        // Cảnh báo nếu vòng kế tiếp đã ghi nhận người thắng cũ và có thể đã thi đấu tiếp
+        const b = state.brackets[catId];
+        if(b && rIdx+1 < b.rounds.length){
+          const nextMatch = b.rounds[rIdx+1][Math.floor(mIdx/2)];
+          if(nextMatch && nextMatch.winner){
+            showToast('⚠️ Vòng sau đã có kết quả dựa trên người thắng cũ — sửa xong nhớ kiểm tra lại vòng sau');
+          }
+        }
+        render();
+      };
+      editRow.appendChild(editBtn);
+      wrap.appendChild(editRow);
+    }
 
     const grid = el('div','set-grid');
     // header row
@@ -1258,16 +1318,42 @@
       if(warnings.length>0){
         wrap.appendChild(el('div','set-warning', '⚠️ '+warnings[0]));
       }
+      if(isEditingThis){
+        wrap.appendChild(el('div','set-warning', 'ℹ️ Đang sửa kết quả đã có sẵn — bấm "Xác nhận" để lưu thay đổi, hoặc "Huỷ" để giữ nguyên kết quả cũ.'));
+      }
       const confirmRow = el('div','confirm-row');
-      const cbtn = el('button','mini-btn','Xác nhận kết quả (thắng 2/3 set)');
+      const cbtn = el('button','mini-btn', isEditingThis ? '✅ Xác nhận thay đổi' : 'Xác nhận kết quả (thắng 2/3 set)');
       // Không khoá cứng theo trạng thái vẽ ban đầu (sẽ không cập nhật khi đang gõ điểm) —
       // kiểm tra hợp lệ ngay tại thời điểm bấm để luôn chính xác.
       cbtn.onclick = ()=>{
         const w = matchWinnerFromSets(m);
         if(!w){ showToast('⚠️ Cần 1 bên thắng đủ 2 set hợp lệ (≥21đ, cách biệt ≥2, tối đa 30đ) mới xác nhận được'); return; }
+        editingMatches.delete(m.id);
+        delete m._setsBackup;
         confirmMatchWinner(catId, rIdx, mIdx, w);
       };
       confirmRow.appendChild(cbtn);
+      if(isEditingThis){
+        const cancelBtn = el('button','btn btn-outline','Huỷ');
+        cancelBtn.onclick = ()=>{
+          if(m._setsBackup) m.sets = m._setsBackup;
+          delete m._setsBackup;
+          editingMatches.delete(m.id);
+          render();
+        };
+        confirmRow.appendChild(cancelBtn);
+
+        const deleteBtn = el('button','btn btn-outline','🗑️ Xoá kết quả, đánh lại');
+        deleteBtn.style.cssText = 'color:var(--red);border-color:var(--red);';
+        deleteBtn.onclick = async ()=>{
+          const ok = await modalConfirm('Xoá hẳn kết quả trận này để đánh lại từ đầu? Không thể hoàn tác.', 'Xoá kết quả');
+          if(!ok) return;
+          delete m._setsBackup;
+          editingMatches.delete(m.id);
+          clearMatchResult(catId, rIdx, mIdx);
+        };
+        confirmRow.appendChild(deleteBtn);
+      }
       wrap.appendChild(confirmRow);
     }
     return wrap;
@@ -1376,6 +1462,8 @@
           lastDate = m.date;
         }
         const card = el('div','sched-card');
+        card.style.position = 'relative';
+        const isEditingThis = editingSchedule.has(m.id);
 
         const flag1 = el('div','sched-flag', initialsFor(m.p1.label));
         flag1.style.background = colorFor(m.p1.label);
@@ -1383,9 +1471,18 @@
 
         card.appendChild(el('div','sched-team', escapeHtml(m.p1.label)));
 
-        const timePill = el('div','sched-time-pill');
-        timePill.innerHTML = `<div class="d">${item.roundLabel}</div>${m.time||'--:--'}`;
-        card.appendChild(timePill);
+        if(isAdmin && isEditingThis){
+          const editWrap = el('div',''); editWrap.style.cssText='display:flex;flex-direction:column;gap:4px;align-items:center;';
+          const dInp = document.createElement('input'); dInp.type='date'; dInp.className='sched-input'; dInp.value=m.date||'';
+          const tInp = document.createElement('input'); tInp.type='time'; tInp.className='sched-input'; tInp.value=m.time||'';
+          editWrap.appendChild(dInp); editWrap.appendChild(tInp);
+          card.appendChild(editWrap);
+          card._dInp = dInp; card._tInp = tInp;
+        } else {
+          const timePill = el('div','sched-time-pill');
+          timePill.innerHTML = `<div class="d">${item.roundLabel}</div>${m.time||'--:--'}`;
+          card.appendChild(timePill);
+        }
 
         card.appendChild(el('div','sched-team right', escapeHtml(m.p2.label)));
 
@@ -1397,6 +1494,38 @@
         metaRow.style.gridColumn = '1 / -1';
         metaRow.innerHTML = `<span class="sched-cat">${item.catName}</span><span></span>`;
         card.appendChild(metaRow);
+
+        if(isAdmin){
+          const actionRow = el('div',''); actionRow.style.cssText='grid-column:1/-1;display:flex;gap:8px;margin-top:8px;';
+          if(isEditingThis){
+            const saveBtn = el('button','mini-btn','✅ Lưu');
+            saveBtn.onclick = ()=>{
+              m.date = card._dInp.value;
+              m.time = card._tInp.value;
+              editingSchedule.delete(m.id);
+              saveState(); render();
+              showToast('✅ Đã lưu lịch thi đấu');
+            };
+            const cancelBtn = el('button','btn btn-outline','Huỷ');
+            cancelBtn.style.cssText='font-size:12px;padding:4px 10px;';
+            cancelBtn.onclick = ()=>{ editingSchedule.delete(m.id); render(); };
+            actionRow.appendChild(saveBtn); actionRow.appendChild(cancelBtn);
+          } else {
+            const editBtn = el('button','mini-btn','✏️ Sửa lịch');
+            editBtn.onclick = ()=>{ editingSchedule.add(m.id); render(); };
+            const delBtn = el('button','btn btn-outline','🗑️ Xoá lịch');
+            delBtn.style.cssText='font-size:12px;padding:4px 10px;color:var(--red);border-color:var(--red);';
+            delBtn.onclick = async ()=>{
+              const ok = await modalConfirm('Xoá lịch trận này? Trận sẽ chuyển về mục "Chưa xếp lịch".', 'Xoá lịch');
+              if(!ok) return;
+              m.date=''; m.time='';
+              saveState(); render();
+              showToast('🗑️ Đã xoá lịch');
+            };
+            actionRow.appendChild(editBtn); actionRow.appendChild(delBtn);
+          }
+          card.appendChild(actionRow);
+        }
 
         listWrap.appendChild(card);
       });
@@ -1414,6 +1543,21 @@
         row.style.marginBottom='8px'; row.style.padding='12px 16px';
         row.innerHTML = `<div class="sched-cat">${item.catName} · ${item.roundLabel}</div>
           <div style="margin-top:4px;font-size:13.5px;font-weight:700;color:var(--ink);">${escapeHtml(m.p1.label)} <span style="color:var(--ink-dim);font-weight:400;">vs</span> ${escapeHtml(m.p2.label)}</div>`;
+        if(isAdmin){
+          const manualRow = el('div',''); manualRow.style.cssText='display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;';
+          const dInp = document.createElement('input'); dInp.type='date'; dInp.className='sched-input';
+          const tInp = document.createElement('input'); tInp.type='time'; tInp.className='sched-input'; tInp.value='15:30';
+          const saveBtn = el('button','mini-btn','📌 Xếp lịch trận này');
+          saveBtn.onclick = ()=>{
+            if(!dInp.value){ showToast('⚠️ Vui lòng chọn ngày thi đấu'); return; }
+            m.date = dInp.value;
+            m.time = tInp.value || '15:30';
+            saveState(); render();
+            showToast('🗓️ Đã xếp lịch trận này');
+          };
+          manualRow.appendChild(dInp); manualRow.appendChild(tInp); manualRow.appendChild(saveBtn);
+          row.appendChild(manualRow);
+        }
         uwrap.appendChild(row);
       });
       app.appendChild(uwrap);
