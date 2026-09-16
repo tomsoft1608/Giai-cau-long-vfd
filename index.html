@@ -443,8 +443,7 @@
     </div>
   </div>
   <div class="tabs" id="tabs"></div>
-  <button class="btn btn-outline" id="exportBtn" style="display:none;">📤 Xuất dữ liệu</button>
-  <div class="admin-toggle" id="adminToggle"><span class="dot"></span><span id="adminLabel">Chế độ xem</span></div>
+  <div class="admin-toggle" id="adminToggle" style="cursor:default;"><span class="dot"></span><span id="adminLabel">🔒 Chỉ xem</span></div>
 </div>
 
 <div class="container" id="app"></div>
@@ -561,84 +560,32 @@
     });
   }
 
-  async function loadState(){
-    try{
-      const res = await window.storage.get(STORAGE_KEY, true);
-      if(res && res.value){
-        const parsed = JSON.parse(res.value);
-        state = Object.assign({ athletes: [], brackets: {}, plan: [], announcements: [] }, parsed);
-        migrateState();
-      } else {
-        seedDefaults();
-        await saveState();
-      }
-    }catch(e){
-      seedDefaults();
-    }
-    importFromSheetOnce();
+  const SNAPSHOT_DATE = new Date().toISOString();
+
+  // BẢN PUBLIC CHỈ XEM: dữ liệu thật do BTC xuất ra từ công cụ nội bộ (nút "Xuất dữ liệu"),
+  // đã được Claude kiểm tra và loại bỏ dữ liệu test/rác trước khi nhúng vào đây.
+  // Đóng băng tại thời điểm xuất bản — BTC nhờ Claude publish lại khi có cập nhật mới.
+  let DECODE_ERROR = null;
+  let PUBLIC_STATE = null;
+  try{
+    PUBLIC_STATE = JSON.parse(decodeURIComponent(escape(atob("eyJhdGhsZXRlcyI6IFt7ImlkIjogIjFpbDM2cnBtIiwgIm5hbWUiOiAiUGjhuqFtIFRoYW5oIFRo4bq/IiwgImRlcHQiOiAiUUMgTGluZS9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX25hbSIsICJjcmVhdGVkQXQiOiAiMjAyNi0wOS0xNVQwNzowOTozNy42MjBaIn0sIHsiaWQiOiAiam0wcmZheDYiLCAibmFtZSI6ICJOZ3V54buFbiBUaOG7iyBD4bqpbSBMaW5oIiwgImRlcHQiOiAiUUMvQVZGIiwgInBhcnRuZXIiOiAiIiwgImNhdGVnb3J5IjogImRvbl9udSIsICJjcmVhdGVkQXQiOiAiMjAyNi0wOS0xNVQwNzowOTozNy42MjVaIn0sIHsiaWQiOiAiaWQ5d2wyejciLCAibmFtZSI6ICJMw6ogVGjhu4sgS2ltIEtow6FuaCIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIiIsICJjYXRlZ29yeSI6ICJkb25fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogIndmZXQ0cWduIiwgIm5hbWUiOiAiVsO1IFRo4buLIE5oxrAgw50iLCAiZGVwdCI6ICJRQy9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX251IiwgImNyZWF0ZWRBdCI6ICIyMDI2LTA5LTE1VDA3OjA5OjM3LjYyNVoifSwgeyJpZCI6ICJxMjV6bHRiNiIsICJuYW1lIjogIkh14buzbmggTmd1eeG7hW4gVMaw4budbmcgVnkiLCAiZGVwdCI6ICJRQy9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX251IiwgImNyZWF0ZWRBdCI6ICIyMDI2LTA5LTE1VDA3OjA5OjM3LjYyNVoifSwgeyJpZCI6ICJnMmQzYm9xcyIsICJuYW1lIjogIlbDtSBUaOG7iyBIdeG7s25oIExhbmgiLCAiZGVwdCI6ICJRQy9BVkYiLCAicGFydG5lciI6ICIiLCAiY2F0ZWdvcnkiOiAiZG9uX251IiwgImNyZWF0ZWRBdCI6ICIyMDI2LTA5LTE1VDA3OjA5OjM3LjYyNVoifSwgeyJpZCI6ICIxeDZkMW1obSIsICJuYW1lIjogIk5ndXnhu4VuIFRo4buLIEhvYSIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIiIsICJjYXRlZ29yeSI6ICJkb25fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogIjF1aWY2ZnA2IiwgIm5hbWUiOiAixJDhu5cgVGjhu4sgVGjDuXkgTGluaCIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIiIsICJjYXRlZ29yeSI6ICJkb25fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogImU1d2EzeG9tIiwgIm5hbWUiOiAiTmd1eeG7hW4gVGjhu4sgQ+G6qW0gTGluaCIsICJkZXB0IjogIlFDL0FWRiIsICJwYXJ0bmVyIjogIk5ndXnhu4VuIE5n4buNYyBTxqFuIiwgImNhdGVnb3J5IjogImRvaV9uYW1fbnUiLCAiY3JlYXRlZEF0IjogIjIwMjYtMDktMTVUMDc6MDk6MzcuNjI1WiJ9LCB7ImlkIjogIjJ1M2FmNmc0IiwgIm5hbWUiOiAiUGjhuqFtIFRoYW5oIFRo4bq/IiwgImRlcHQiOiAiUUMgTGluZS9BVkYiLCAicGFydG5lciI6ICJQaOG6oW0gVGjhu4sgTmfhu41jIFF1eeG7gW4iLCAiY2F0ZWdvcnkiOiAiZG9pX25hbV9udSIsICJjcmVhdGVkQXQiOiAiMjAyNi0wOS0xNVQwNzowOTozNy42MjVaIn1dLCAiYnJhY2tldHMiOiB7ImRvbl9udSI6IHsicm91bmRzIjogW1t7ImlkIjogIm92bDZkcDI0IiwgInAxIjogeyJpZCI6ICJxMjV6bHRiNiIsICJsYWJlbCI6ICJIdeG7s25oIE5ndXnhu4VuIFTGsOG7nW5nIFZ5IiwgImRlcHQiOiAiUUMvQVZGIn0sICJwMiI6IHsiaWQiOiAiam0wcmZheDYiLCAibGFiZWwiOiAiTmd1eeG7hW4gVGjhu4sgQ+G6qW0gTGluaCIsICJkZXB0IjogIlFDL0FWRiJ9LCAic2V0cyI6IFt7InMxIjogIjIxIiwgInMyIjogIjE4In0sIHsiczEiOiAiMjEiLCAiczIiOiAiMTgifSwgeyJzMSI6ICIiLCAiczIiOiAiIn1dLCAid2lubmVyIjogInAxIiwgImRhdGUiOiAiMjAyNi0wOS0xNSIsICJ0aW1lIjogIjE2OjMwIn0sIHsiaWQiOiAibHVqa2g5cnoiLCAicDEiOiB7ImlkIjogImlkOXdsMno3IiwgImxhYmVsIjogIkzDqiBUaOG7iyBLaW0gS2jDoW5oIiwgImRlcHQiOiAiUUMvQVZGIn0sICJwMiI6IHsiaWQiOiAiZzJkM2JvcXMiLCAibGFiZWwiOiAiVsO1IFRo4buLIEh14buzbmggTGFuaCIsICJkZXB0IjogIlFDL0FWRiJ9LCAic2V0cyI6IFt7InMxIjogIiIsICJzMiI6ICIifSwgeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9XSwgIndpbm5lciI6IG51bGwsICJkYXRlIjogIiIsICJ0aW1lIjogIiJ9LCB7ImlkIjogImphaW11dnRvIiwgInAxIjogeyJpZCI6ICJ3ZmV0NHFnbiIsICJsYWJlbCI6ICJWw7UgVGjhu4sgTmjGsCDDnSIsICJkZXB0IjogIlFDL0FWRiJ9LCAicDIiOiB7ImlkIjogIjF1aWY2ZnA2IiwgImxhYmVsIjogIsSQ4buXIFRo4buLIFRow7l5IExpbmgiLCAiZGVwdCI6ICJRQy9BVkYifSwgInNldHMiOiBbeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifV0sICJ3aW5uZXIiOiBudWxsLCAiZGF0ZSI6ICIiLCAidGltZSI6ICIifSwgeyJpZCI6ICI1MnFwMWxoNCIsICJwMSI6IHsiaWQiOiAiMXg2ZDFtaG0iLCAibGFiZWwiOiAiTmd1eeG7hW4gVGjhu4sgSG9hIiwgImRlcHQiOiAiUUMvQVZGIn0sICJwMiI6IG51bGwsICJzZXRzIjogW3siczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifSwgeyJzMSI6ICIiLCAiczIiOiAiIn1dLCAid2lubmVyIjogInAxIiwgImRhdGUiOiAiIiwgInRpbWUiOiAiIn1dLCBbeyJpZCI6ICIyc3ozcTdoeSIsICJwMSI6IHsiaWQiOiAicTI1emx0YjYiLCAibGFiZWwiOiAiSHXhu7NuaCBOZ3V54buFbiBUxrDhu51uZyBWeSIsICJkZXB0IjogIlFDL0FWRiJ9LCAicDIiOiBudWxsLCAic2V0cyI6IFt7InMxIjogIiIsICJzMiI6ICIifSwgeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9XSwgIndpbm5lciI6IG51bGwsICJkYXRlIjogIiIsICJ0aW1lIjogIiJ9LCB7ImlkIjogImIzZWdwdmZwIiwgInAxIjogbnVsbCwgInAyIjogeyJpZCI6ICIxeDZkMW1obSIsICJsYWJlbCI6ICJOZ3V54buFbiBUaOG7iyBIb2EiLCAiZGVwdCI6ICJRQy9BVkYifSwgInNldHMiOiBbeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifV0sICJ3aW5uZXIiOiAicDIiLCAiZGF0ZSI6ICIiLCAidGltZSI6ICIifV0sIFt7ImlkIjogImt5ZW9ocXk3IiwgInAxIjogbnVsbCwgInAyIjogbnVsbCwgInNldHMiOiBbeyJzMSI6ICIiLCAiczIiOiAiIn0sIHsiczEiOiAiIiwgInMyIjogIiJ9LCB7InMxIjogIiIsICJzMiI6ICIifV0sICJ3aW5uZXIiOiBudWxsLCAiZGF0ZSI6ICIiLCAidGltZSI6ICIifV1dLCAidG90YWxSb3VuZHMiOiAzfX0sICJwbGFuIjogW3siaWQiOiAidjVwZjZnYmkiLCAidGl0bGUiOiAiTeG7nyDEkcSDbmcga8O9IHbhuq1uIMSR4buZbmcgdmnDqm4iLCAiZGVzYyI6ICJUb8OgbiB0aOG7gyBuaMOibiB2acOqbiDEkcSDbmcga8O9IHF1YSB0YWIgxJDEg25nIGvDvSIsICJkYXRlIjogIjIwMjYtMDktMTRUMDg6MjQ6MDMuNDEwWiIsICJkb25lIjogdHJ1ZX0sIHsiaWQiOiAiY2dkcG5sdjciLCAidGl0bGUiOiAiQ2jhu5F0IGRhbmggc8OhY2ggJiBi4buRYyB0aMSDbSIsICJkZXNjIjogIkJUQyB0aeG6v24gaMOgbmggYuG7kWMgdGjEg20gY2hpYSBi4bqjbmcgY2hvIHThu6tuZyBu4buZaSBkdW5nIiwgImRhdGUiOiAiMjAyNi0wOS0yMVQwODoyNDowMy40MTVaIiwgImRvbmUiOiBmYWxzZX0sIHsiaWQiOiAiOGYwM3g4N28iLCAidGl0bGUiOiAiVGhpIMSR4bqldSB2w7JuZyBsb+G6oWkiLCAiZGVzYyI6ICJUaGkgxJHhuqV1IHbDsm5nIDEgLSB2w7JuZyAyIGPDoWMgbuG7mWkgZHVuZyIsICJkYXRlIjogIjIwMjYtMDktMjhUMDg6MjQ6MDMuNDE1WiIsICJkb25lIjogZmFsc2V9LCB7ImlkIjogIjV5Zms0dm1mIiwgInRpdGxlIjogIkLDoW4ga+G6v3QgJiBDaHVuZyBr4bq/dCIsICJkZXNjIjogIlRyYW8gZ2nhuqNpIHRvw6BuIGLhu5kgNCBu4buZaSBkdW5nIiwgImRhdGUiOiAiMjAyNi0xMC0wNVQwODoyNDowMy40MTVaIiwgImRvbmUiOiBmYWxzZX1dLCAiYW5ub3VuY2VtZW50cyI6IFt7ImlkIjogInpuMWhoZzB0IiwgInRleHQiOiAiQ2jDoG8gbeG7q25nIMSR4bq/biB24bubaSBHaeG6o2kgQ+G6p3UgTMO0bmcgTuG7mWkgQuG7mSEgUXXDqXQgbcOjIFFSIHRyw6puIFBvc3RlciDEkeG7gyDEkcSDbmcga8O9IHRoYW0gZ2lhLiIsICJkYXRlIjogIjIwMjYtMDktMTRUMDg6MjQ6MDMuNDE1WiJ9XX0="))));
+  }catch(e){
+    DECODE_ERROR = (e && e.message) ? e.message : String(e);
+    PUBLIC_STATE = { athletes: [], brackets: {}, plan: [], announcements: [] };
+  }
+
+  function loadState(){
+    state = Object.assign({ athletes: [], brackets: {}, plan: [], announcements: [] }, PUBLIC_STATE);
+    // Mở mặc định vào nội dung ĐÃ có bảng đấu, tránh người mở link lần đầu
+    // rơi vào tab đầu tiên (Đơn Nam) đang trống rồi tưởng nhầm là lỗi.
+    const firstWithBracket = CATS.find(c => state.brackets[c.id]);
+    if(firstWithBracket) activeCat = firstWithBracket.id;
     ready = true;
     render();
   }
 
-  // Nhập 1 lần danh sách VĐV từ Google Sheet "BẢNG ĐĂNG KÝ HỘI THAO VF 2027" — tab "Cầu lông".
-  // Chỉ chạy đúng 1 lần (đánh dấu bằng cờ state.sheetImportedV1) để không nhập trùng
-  // nếu BTC đã tự thêm/sửa những người này trong app.
-  function importFromSheetOnce(){
-    if(state.sheetImportedV1) return;
-    const rows = [
-      {name:'Phạm Thanh Thế', dept:'QC Line/AVF', category:'don_nam', partner:''},
-      {name:'Nguyễn Thị Cẩm Linh', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Lê Thị Kim Khánh', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Võ Thị Như Ý', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Huỳnh Nguyễn Tường Vy', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Võ Thị Huỳnh Lanh', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Nguyễn Thị Hoa', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Đỗ Thị Thùy Linh', dept:'QC/AVF', category:'don_nu', partner:''},
-      {name:'Nguyễn Thị Cẩm Linh', dept:'QC/AVF', category:'doi_nam_nu', partner:'Nguyễn Ngọc Sơn'},
-      {name:'Phạm Thanh Thế', dept:'QC Line/AVF', category:'doi_nam_nu', partner:'Phạm Thị Ngọc Quyền'},
-    ];
-    rows.forEach(r=>{
-      state.athletes.push({ id: uid(), name:r.name, dept:r.dept, partner:r.partner, category:r.category, createdAt: new Date().toISOString() });
-    });
-    state.sheetImportedV1 = true;
-    saveState();
-  }
-
-  // Vá dữ liệu cũ (tạo trước khi đổi cấu trúc điểm sang 3 set / bỏ trường sân)
-  // để tránh lỗi khi tải lại bảng đấu đã tạo từ phiên bản app trước.
-  function migrateState(){
-    let changed = false;
-    Object.keys(state.brackets||{}).forEach(catId=>{
-      const b = state.brackets[catId];
-      if(!b || !b.rounds) return;
-      b.rounds.forEach(round=>{
-        round.forEach(m=>{
-          if(!Array.isArray(m.sets)){
-            // Dữ liệu cũ dùng score1/score2 1 set duy nhất -> chuyển thành set đầu tiên, còn lại để trống
-            const legacyS1 = m.score1 || '';
-            const legacyS2 = m.score2 || '';
-            m.sets = [
-              {s1:legacyS1, s2:legacyS2},
-              {s1:'', s2:''},
-              {s1:'', s2:''}
-            ];
-            delete m.score1; delete m.score2;
-            changed = true;
-          }
-          if(m.court !== undefined){ delete m.court; changed = true; }
-        });
-      });
-    });
-    if(changed) saveState();
-  }
-
-  async function saveState(){
-    try{
-      await window.storage.set(STORAGE_KEY, JSON.stringify(state), true);
-    }catch(e){
-      showToast('⚠️ Lỗi lưu dữ liệu, thử lại sau');
-    }
-  }
+  // no-op: trang public không ghi dữ liệu lại đâu cả (chỉ xem)
+  async function saveState(){}
 
   function seedDefaults(){
     state.plan = [
@@ -648,7 +595,7 @@
       {id:uid(), title:'Bán kết & Chung kết', desc:'Trao giải toàn bộ 5 nội dung', date:new Date(Date.now()+21*86400000).toISOString(), done:false},
     ];
     state.announcements = [
-      {id:uid(), text:'Chào mừng đến với Giải Cầu Lông Nội Bộ! Đăng ký ngay tại tab "Đăng ký" để tham gia.', date:new Date().toISOString()}
+      {id:uid(), text:'Chào mừng đến với Giải Cầu Lông Nội Bộ! Quét mã QR trên Poster để đăng ký tham gia.', date:new Date().toISOString()}
     ];
   }
 
@@ -794,7 +741,7 @@
     const tabs = [
       {id:'posterpage', label:'🖼️ Poster'},
       {id:'poster', label:'📣 Thông báo'},
-      {id:'register', label:'📝 Đăng ký'},
+      {id:'roster', label:'👥 Danh sách VĐV'},
       {id:'plan', label:'📅 Kế hoạch'},
       {id:'draw', label:'🎲 Bốc thăm', adminOnly:true},
       {id:'bracket', label:'🏆 Bảng đấu'},
@@ -814,8 +761,7 @@
     renderTabs();
     const at = document.getElementById('adminToggle');
     at.className = 'admin-toggle' + (isAdmin?' on':'');
-    document.getElementById('adminLabel').textContent = isAdmin ? 'Chế độ BTC' : 'Chế độ xem';
-    document.getElementById('exportBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+    document.getElementById('adminLabel').textContent = '🔒 Chỉ xem';
 
     const app = document.getElementById('app');
     app.innerHTML = '';
@@ -823,7 +769,7 @@
 
     if(activeTab==='posterpage') renderPosterPage(app);
     else if(activeTab==='poster') renderPoster(app);
-    else if(activeTab==='register') renderRegister(app);
+    else if(activeTab==='roster') renderRoster(app);
     else if(activeTab==='plan') renderPlan(app);
     else if(activeTab==='draw') renderDraw(app);
     else if(activeTab==='bracket') renderBracketTab(app);
@@ -841,8 +787,8 @@
     app.appendChild(imgWrap);
 
     const cta = el('div','poster-cta-row');
-    const ctaBtn = el('button','btn btn-primary','Đăng ký tham gia ngay →');
-    ctaBtn.onclick = ()=>{ activeTab='register'; render(); };
+    const ctaBtn = el('button','btn btn-primary','Xem danh sách đã đăng ký →');
+    ctaBtn.onclick = ()=>{ activeTab='roster'; render(); };
     cta.appendChild(ctaBtn);
     app.appendChild(cta);
   }
@@ -853,6 +799,7 @@
       <div class="ann-banner-kicker">GIẢI CẦU LÔNG NỘI BỘ · VFD</div>
       <h1 class="ann-banner-title">Bảng tin &amp; Thông báo</h1>
       <div class="ann-banner-sub">Cập nhật mới nhất về tiến độ đăng ký, bốc thăm và lịch thi đấu.</div>
+      <div class="ann-banner-sub" style="margin-top:6px;font-size:12px;">🕒 Dữ liệu cập nhật lần cuối: ${fmtDate(SNAPSHOT_DATE)}</div>
     `;
     app.appendChild(banner);
 
@@ -895,73 +842,21 @@
 
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
-  function renderRegister(app){
-    app.appendChild(el('h2','section-title','Đăng ký vận động viên'));
-    app.appendChild(el('div','section-sub','Chọn nội dung thi đấu và điền thông tin. Ảnh hiển thị là avatar chữ cái đầu tên.'));
+  function renderRoster(app){
+    app.appendChild(el('h2','section-title','Danh sách vận động viên'));
+    app.appendChild(el('div','section-sub','Danh sách đã đăng ký theo từng nội dung. Đăng ký qua mã QR trên Poster.'));
 
-    const grid = el('div','grid-2');
-
-    // form card
-    const formCard = el('div','card');
-    formCard.innerHTML = `<h2 class="section-title" style="font-size:17px;margin-bottom:2px;">Thông tin đăng ký</h2>`;
-    const catSelect = el('select');
-    CATS.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; catSelect.appendChild(o); });
-    catSelect.value = lastRegCategory || activeCat;
-    const lbl0 = el('label','','Nội dung thi đấu'); formCard.appendChild(lbl0); formCard.appendChild(catSelect);
-
-    const lbl1 = el('label','','Họ tên vận động viên'); formCard.appendChild(lbl1);
-    const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.placeholder='Nguyễn Văn A';
-    formCard.appendChild(nameInput);
-
-    const partnerWrap = el('div','');
-    const lbl2 = el('label','','Họ tên đồng đội (nội dung đôi)');
-    const partnerInput = document.createElement('input'); partnerInput.type='text'; partnerInput.placeholder='Trần Văn B';
-    partnerWrap.appendChild(lbl2); partnerWrap.appendChild(partnerInput);
-    formCard.appendChild(partnerWrap);
-
-    const lbl3 = el('label','','Phòng ban'); formCard.appendChild(lbl3);
-    const deptInput = document.createElement('input'); deptInput.type='text'; deptInput.placeholder='QA/QC';
-    formCard.appendChild(deptInput);
-
-    function syncPartnerVisibility(){
-      const cat = CATS.find(c=>c.id===catSelect.value);
-      partnerWrap.style.display = cat.pair ? 'block' : 'none';
-      lastRegCategory = catSelect.value;
-    }
-    syncPartnerVisibility();
-    catSelect.onchange = syncPartnerVisibility;
-
-    const submitBtn = el('button','btn btn-primary','Đăng ký tham gia');
-    submitBtn.style.marginTop='16px';
-    submitBtn.onclick = ()=>{
-      const cat = CATS.find(c=>c.id===catSelect.value);
-      const name = nameInput.value.trim();
-      const dept = deptInput.value.trim();
-      const partner = partnerInput.value.trim();
-      if(!name){ showToast('⚠️ Vui lòng nhập họ tên'); return; }
-      if(cat.pair && !partner){ showToast('⚠️ Nội dung đôi cần nhập tên đồng đội'); return; }
-      state.athletes.push({ id: uid(), name, dept, partner: cat.pair ? partner : '', category: cat.id, createdAt: new Date().toISOString() });
-      lastRegCategory = cat.id;
-      nameInput.value=''; partnerInput.value=''; deptInput.value='';
-      saveState(); render();
-      showToast('✅ Đăng ký thành công');
-    };
-    formCard.appendChild(submitBtn);
-    grid.appendChild(formCard);
-
-    // roster card
-    const rosterCard = el('div','card');
-    rosterCard.innerHTML = `<h2 class="section-title" style="font-size:17px;margin-bottom:2px;">Danh sách đã đăng ký</h2>`;
-    const pillRow = el('div','cat-row'); pillRow.style.marginTop='14px';
+    const card = el('div','card');
+    const pillRow = el('div','cat-row');
     CATS.forEach(c=>{
       const count = state.athletes.filter(a=>a.category===c.id).length;
       const pill = el('div','cat-pill'+(activeCat===c.id?' active':''), `${c.name} <span class="count">${count}</span>`);
       pill.onclick = ()=>{ activeCat=c.id; render(); };
       pillRow.appendChild(pill);
     });
-    rosterCard.appendChild(pillRow);
+    card.appendChild(pillRow);
 
-    const rosterList = el('div','roster');
+    const rosterList = el('div','roster'); rosterList.style.marginTop='16px';
     const entries = state.athletes.filter(a=>a.category===activeCat);
     if(entries.length===0){
       rosterList.appendChild(el('div','empty-state','Chưa có ai đăng ký nội dung này'));
@@ -975,21 +870,11 @@
         const textWrap = el('div','');
         textWrap.innerHTML = `<div class="name">${escapeHtml(displayName)}</div><div class="dept">${escapeHtml(a.dept||'—')}</div>`;
         item.appendChild(textWrap);
-        if(isAdmin){
-          const rm = el('div','rm','✕');
-          rm.onclick = ()=>{
-            state.athletes = state.athletes.filter(x=>x.id!==a.id);
-            saveState(); render();
-          };
-          item.appendChild(rm);
-        }
         rosterList.appendChild(item);
       });
     }
-    rosterCard.appendChild(rosterList);
-    grid.appendChild(rosterCard);
-
-    app.appendChild(grid);
+    card.appendChild(rosterList);
+    app.appendChild(card);
   }
 
   function renderPlan(app){
@@ -1569,51 +1454,7 @@
     return slot;
   }
 
-  /* ---------- Init ---------- */
-  document.getElementById('adminToggle').onclick = async ()=>{
-    if(!isAdmin){
-      const res = await modalPrompt('Chế độ Ban tổ chức', [
-        {key:'pass', label:'Nhập mã Ban tổ chức', type:'password', placeholder:'Mã BTC'}
-      ]);
-      if(!res) return;
-      if(res.pass !== 'BTC2026'){ showToast('⚠️ Mã không đúng'); return; }
-    }
-    isAdmin = !isAdmin;
-    if(!isAdmin && activeTab==='draw') activeTab='posterpage';
-    render();
-  };
-
-  document.getElementById('exportBtn').onclick = ()=>{
-    const json = JSON.stringify(state, null, 2);
-    const overlay = el('div','modal-overlay');
-    const box = el('div','modal-box'); box.style.maxWidth='560px';
-    box.appendChild(el('div','modal-title','📤 Xuất dữ liệu để cập nhật link public'));
-    box.appendChild(el('div','modal-msg','Bấm "Copy toàn bộ" rồi dán (Ctrl+V / Cmd+V) đoạn này vào khung chat với Claude, kèm câu "cập nhật link public".'));
-    const ta = document.createElement('textarea');
-    ta.value = json; ta.readOnly = true;
-    ta.style.cssText = 'width:100%;height:220px;background:#0c0f14;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:monospace;font-size:11px;resize:vertical;';
-    box.appendChild(ta);
-    const actions = el('div','modal-actions');
-    const closeBtn = el('button','btn btn-outline','Đóng');
-    closeBtn.onclick = ()=>closeModal(overlay);
-    const copyBtn = el('button','btn btn-primary','Copy toàn bộ');
-    copyBtn.onclick = async ()=>{
-      try{
-        await navigator.clipboard.writeText(json);
-        showToast('✅ Đã copy — dán vào chat với Claude');
-      }catch(e){
-        ta.select();
-        showToast('⚠️ Không tự copy được — đã bôi đen sẵn, anh bấm Ctrl+C');
-      }
-    };
-    actions.appendChild(closeBtn); actions.appendChild(copyBtn);
-    box.appendChild(actions);
-    overlay.appendChild(box);
-    overlay.onclick = (e)=>{ if(e.target===overlay) closeModal(overlay); };
-    document.body.appendChild(overlay);
-    requestAnimationFrame(()=>overlay.classList.add('show'));
-  };
-
+  /* ---------- Init (bản CHỈ XEM — không có chế độ BTC) ---------- */
   loadState();
 })();
 </script>
