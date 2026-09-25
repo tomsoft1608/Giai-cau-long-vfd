@@ -178,12 +178,13 @@
   /* Athlete list */
   .roster{ margin-top:16px; display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
   .roster-item{
-    display:flex; align-items:center; gap:10px; padding:9px 10px;
-    background:var(--panel-2); border-radius:8px; border:1px solid var(--line);
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:#0a0b0e; border-radius:8px; border:3px solid #5a6478;
+    box-shadow:0 2px 6px rgba(0,0,0,0.45);
   }
   .roster-item.roster-item-pair{
     flex-direction:column; align-items:stretch; gap:0; padding:0;
-    overflow:hidden;
+    overflow:hidden; flex-shrink:0; height:auto;
   }
   .pair-person{
     display:flex; align-items:center; gap:10px; padding:9px 10px;
@@ -912,14 +913,6 @@
       pillRow.appendChild(pill);
     });
     card.appendChild(pillRow);
-
-    // DEBUG TẠM THỜI — sẽ xoá sau khi tìm ra lỗi
-    const dbg = el('div','');
-    dbg.style.cssText = 'margin-top:10px;padding:8px 10px;background:#2a1010;border:1px solid #7a2020;border-radius:6px;color:#ff9b9b;font-size:10.5px;font-family:monospace;white-space:pre-wrap;word-break:break-all;';
-    const entriesForDbg = state.athletes.filter(a=>a.category===activeCat);
-    const pairCount = entriesForDbg.filter(a=>a.partner).length;
-    dbg.textContent = `🔧DEBUG activeCat=${activeCat} entries=${entriesForDbg.length} withPartner=${pairCount} DECODE_ERROR=${DECODE_ERROR||'none'} names=${entriesForDbg.map(a=>a.name+(a.partner?'+'+a.partner:'')).join('|')}`;
-    card.appendChild(dbg);
 
     const rosterList = el('div','roster'); rosterList.style.marginTop='16px';
     const entries = state.athletes.filter(a=>a.category===activeCat);
